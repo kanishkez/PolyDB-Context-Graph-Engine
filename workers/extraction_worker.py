@@ -5,7 +5,8 @@ All incremental: only processes changed data.
 import asyncio
 import json
 import logging
-from typing import List
+import time
+from typing import List, Dict
 from sqlalchemy.ext.asyncio import AsyncSession
 from connectors.factory import get_connector
 from graph.inference import infer_relationships
@@ -19,65 +20,88 @@ from config import settings
 from db.session import AsyncSessionLocal
 
 logger = logging.getLogger(__name__)
+_source_locks: Dict[str, asyncio.Lock] = {}
+_last_run_ts: Dict[str, float] = {}
 
 
-async def run_extraction(db_config: dict):
+def _get_source_lock(source_db: str) -> asyncio.Lock:
+    if source_db not in _source_locks:
+        _source_locks[source_db] = asyncio.Lock()
+    return _source_locks[source_db]
+
+
+async def run_extraction(db_config: dict, force: bool = False):
     """
     Incremental extraction pipeline for a single database.
     Only processes changed tables.
     """
     connector = get_connector(db_config)
     source_db = db_config["name"]
-
-    logger.info(f"[extraction] Starting for {source_db}")
-
-    if not await connector.test_connection():
-        logger.error(f"[extraction] Cannot connect to {source_db}")
+    lock = _get_source_lock(source_db)
+    if lock.locked():
+        logger.info(f"[extraction] Skipping {source_db}: run already in progress")
         return
 
-    # Extract all metadata from source
-    tables = await connector.extract_tables()
-    relationships = await connector.extract_relationships()
-
-    # Infer additional relationships
-    inferred = infer_relationships(tables)
-    all_relationships = relationships + inferred
-
-    # Build hash map for change detection
-    current_hashes = {t.node_id: t.metadata_hash for t in tables}
-
-    async with AsyncSessionLocal() as session:
-        changed_ids, deleted_ids = await metadata_service.get_changed_tables(
-            session, source_db, current_hashes
-        )
-
+    now = time.time()
+    last = _last_run_ts.get(source_db, 0.0)
+    if not force and (now - last) < settings.EVENT_DEBOUNCE_SECONDS:
         logger.info(
-            f"[extraction] {source_db}: {len(changed_ids)} changed, "
-            f"{len(deleted_ids)} deleted out of {len(tables)} total"
+            f"[extraction] Skipping {source_db}: debounced "
+            f"({round(now - last, 2)}s since last run)"
         )
+        return
+    _last_run_ts[source_db] = now
 
-        # Process only changed tables
-        changed_set = set(changed_ids)
-        changed_tables = [t for t in tables if t.node_id in changed_set]
+    async with lock:
+        logger.info(f"[extraction] Starting for {source_db}")
 
-        for table in changed_tables:
-            record = await metadata_service.upsert_table(session, table)
-            graph_service.update_table_in_graph(table)
-            cache_service.invalidate_table(table.node_id)
+        if not await connector.test_connection():
+            logger.error(f"[extraction] Cannot connect to {source_db}")
+            return
 
-        # Persist all relationships (upsert idempotent)
-        for rel in all_relationships:
-            await metadata_service.upsert_relationship(session, rel)
-            graph_service.add_relationship_to_graph(rel)
+        # Extract all metadata from source
+        tables = await connector.extract_tables()
+        relationships = await connector.extract_relationships()
 
-        # Handle deletions
-        for node_id in deleted_ids:
-            await metadata_service.delete_table(session, node_id)
-            graph_service.graph.remove_table(node_id)
+        # Infer additional relationships
+        inferred = infer_relationships(tables)
+        all_relationships = relationships + inferred
 
-        await session.commit()
+        # Build hash map for change detection
+        current_hashes = {t.node_id: t.metadata_hash for t in tables}
 
-    logger.info(f"[extraction] {source_db}: complete")
+        async with AsyncSessionLocal() as session:
+            changed_ids, deleted_ids = await metadata_service.get_changed_tables(
+                session, source_db, current_hashes
+            )
+
+            logger.info(
+                f"[extraction] {source_db}: {len(changed_ids)} changed, "
+                f"{len(deleted_ids)} deleted out of {len(tables)} total"
+            )
+
+            # Process only changed tables
+            changed_set = set(changed_ids)
+            changed_tables = [t for t in tables if t.node_id in changed_set]
+
+            for table in changed_tables:
+                record = await metadata_service.upsert_table(session, table)
+                graph_service.update_table_in_graph(table)
+                cache_service.invalidate_table(table.node_id)
+
+            # Persist all relationships (upsert idempotent)
+            for rel in all_relationships:
+                await metadata_service.upsert_relationship(session, rel)
+                graph_service.add_relationship_to_graph(rel)
+
+            # Handle deletions
+            for node_id in deleted_ids:
+                await metadata_service.delete_table(session, node_id)
+                graph_service.graph.remove_table(node_id)
+
+            await session.commit()
+
+        logger.info(f"[extraction] {source_db}: complete")
 
 
 async def run_enrichment():

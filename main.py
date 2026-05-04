@@ -12,6 +12,7 @@ from api.routes import router
 from services.graph_service import graph_service
 from embeddings.faiss_store import embedding_store
 from workers.extraction_worker import periodic_refresh
+from workers.event_worker import run_event_listener
 
 logging.basicConfig(
     level=logging.INFO if not settings.DEBUG else logging.DEBUG,
@@ -38,8 +39,16 @@ async def lifespan(app: FastAPI):
     logger.info(f"Embeddings loaded: {embedding_store.total_vectors} vectors")
 
     # Start background refresh (non-blocking)
-    refresh_task = asyncio.create_task(periodic_refresh(interval_seconds=3600))
-    logger.info("Background refresh worker started (1hr interval)")
+    refresh_interval = max(1, settings.POLL_INTERVAL_MINUTES) * 60
+    refresh_task = asyncio.create_task(periodic_refresh(interval_seconds=refresh_interval))
+    logger.info(
+        f"Background refresh worker started ({settings.POLL_INTERVAL_MINUTES} min interval)"
+    )
+
+    event_task = None
+    if settings.ENABLE_EVENT_LISTENER:
+        event_task = asyncio.create_task(run_event_listener())
+        logger.info("Event listener worker started")
 
     logger.info(f"✓ {settings.APP_NAME} ready")
 
@@ -47,10 +56,18 @@ async def lifespan(app: FastAPI):
 
     # ── Shutdown ─────────────────────────────────────────────────────────────
     refresh_task.cancel()
+    if event_task:
+        event_task.cancel()
+
     try:
         await refresh_task
     except asyncio.CancelledError:
         pass
+    if event_task:
+        try:
+            await event_task
+        except asyncio.CancelledError:
+            pass
 
     embedding_store.save()
     logger.info("Embeddings saved. Shutdown complete.")

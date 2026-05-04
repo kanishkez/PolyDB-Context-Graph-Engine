@@ -51,6 +51,10 @@ class Settings(BaseSettings):
     # Workers
     EXTRACTION_BATCH_SIZE: int = 50
     ENRICHMENT_BATCH_SIZE: int = 10
+    POLL_INTERVAL_MINUTES: int = 5
+    EVENT_DEBOUNCE_SECONDS: int = 15
+    ENABLE_EVENT_LISTENER: bool = True
+    EVENT_CHANNEL: str = "polydb_schema_change"
 
     class Config:
         env_file = ".env"
