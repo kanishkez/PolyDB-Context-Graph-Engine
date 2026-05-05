@@ -41,7 +41,6 @@ class AgentRequest(BaseModel):
 
 class ExtractionTriggerRequest(BaseModel):
     source_db: Optional[str] = None  # None = all
-    force: bool = False
 
 
 class SuggestQueryRequest(BaseModel):
@@ -234,16 +233,10 @@ async def trigger_extraction(
         if not cfg:
             raise HTTPException(status_code=404, detail=f"DB not found: {req.source_db}")
         from workers.extraction_worker import run_extraction
-        background_tasks.add_task(run_extraction, cfg, req.force)
+        background_tasks.add_task(run_extraction, cfg)
     else:
-        if req.force:
-            db_configs = json.loads(settings.TARGET_DATABASES)
-            from workers.extraction_worker import run_extraction
-            for cfg in db_configs:
-                background_tasks.add_task(run_extraction, cfg, True)
-        else:
-            background_tasks.add_task(run_all_sources)
-    return {"status": "triggered", "source_db": req.source_db or "all", "force": req.force}
+        background_tasks.add_task(run_all_sources)
+    return {"status": "triggered", "source_db": req.source_db or "all"}
 
 
 @router.post("/admin/enrich")
