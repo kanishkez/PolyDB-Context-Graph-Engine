@@ -4,23 +4,17 @@ PolyDB Context Graph Engine is an API-first backend that gives LLMs and agents s
 
 It connects to multiple data sources, extracts metadata, normalizes it into a unified internal model, builds a context graph, and creates embedding-based retrieval. Agents can then query this context through REST APIs or MCP tools.
 
-## What This Project Is
-
-This is not a dashboard product. The UI in this repo is optional and only for local inspection.  
-The core product is the engine exposed through:
-
-- FastAPI endpoints (`/api/v1/...`)
-- MCP-compatible tool endpoints (`/api/v1/mcp/...`)
-
 ## What It Does
 
-1. Connects to source databases (`postgres`, `mysql`, `trino`)
-2. Extracts metadata (tables, columns, keys, relationships)
-3. Normalizes metadata into unified models
-4. Stores normalized metadata in PostgreSQL
-5. Builds an in-memory context graph (NetworkX)
-6. Builds embeddings over table context (Sentence Transformers + FAISS)
-7. Serves reasoning/query APIs for agents
+- Connects to multiple databases (Postgres, MySQL, Trino via connectors).
+- Extracts metadata (tables, columns, keys, relationships).
+- Normalizes metadata into a unified internal model (SQLAlchemy + Postgres metadata store).
+- Builds an in-memory context graph (NetworkX) from that normalized metadata.
+- Builds semantic retrieval over table context using embeddings + FAISS.
+- Exposes APIs (FastAPI) for search, context retrieval, join-path discovery, and smart query reasoning.
+- Supports background refresh workers for incremental updates.
+- Exposes MCP tool endpoints so external agents (e.g., Claude/ChatGPT clients) can call it as tools.
+- Applies security filtering for sensitive columns/contexts.
 
 ## Architecture At A Glance
 
