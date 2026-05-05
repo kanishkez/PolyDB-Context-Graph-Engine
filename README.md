@@ -1,6 +1,8 @@
 # PolyDB Context Graph Engine
 
-PolyDB Context Graph Engine is a production-oriented backend that helps AI agents reason over complex, multi-database environments.
+PolyDB Context Graph Engine is a backend context engine for databases, designed to help LLMs and AI agents reason over enterprise data systems safely and accurately.
+
+It connects to multiple databases (PostgreSQL, MySQL, Trino), extracts and normalizes metadata into a unified internal model, builds a context graph with NetworkX, and creates semantic retrieval with embeddings in FAISS. It exposes these capabilities through FastAPI and MCP-compatible tools so agents can discover relevant tables, relationships, join paths, and query patterns with grounded context.
 
 It is a context engine for structured systems, not a basic RAG stack. The system combines metadata extraction, graph reasoning, semantic retrieval, and constrained LLM usage to answer data-system questions in one API call.
 
