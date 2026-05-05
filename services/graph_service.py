@@ -157,6 +157,17 @@ class GraphService:
         clusters.sort(key=lambda c: c["size"], reverse=True)
         return clusters
 
+    def get_highly_connected_tables(self, top_k: int = 10) -> List[Dict[str, Any]]:
+        table_nodes = [
+            n for n, d in self.graph._graph.nodes(data=True)
+            if d.get("type") == "table"
+        ]
+        if not table_nodes:
+            return []
+        subgraph = self.graph._graph.subgraph(table_nodes).to_undirected()
+        ranked = sorted(subgraph.degree, key=lambda x: x[1], reverse=True)[:top_k]
+        return [{"node_id": node, "degree": degree} for node, degree in ranked]
+
     @property
     def graph_stats(self) -> Dict[str, int]:
         return {

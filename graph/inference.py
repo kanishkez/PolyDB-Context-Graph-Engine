@@ -14,7 +14,20 @@ def infer_relationships(tables: List[NormalizedTable]) -> List[NormalizedRelatio
     2. Column naming similarity across tables (lower confidence)
     """
     inferred = []
-    table_name_map = {t.table_name.lower(): t for t in tables}
+    table_name_map = {}
+    for t in tables:
+        base = t.table_name.lower()
+        variants = {base}
+        if base.endswith("s"):
+            variants.add(base[:-1])
+        else:
+            variants.add(f"{base}s")
+        if base.endswith("ies"):
+            variants.add(base[:-3] + "y")
+        elif base.endswith("y"):
+            variants.add(base[:-1] + "ies")
+        for v in variants:
+            table_name_map.setdefault(v, t)
 
     for table in tables:
         for col in table.columns:

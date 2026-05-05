@@ -131,6 +131,32 @@ async def graph_clusters():
     }
 
 
+@router.get("/graph/clusters/relationships")
+async def graph_relationship_clusters():
+    """Connected-component style table clusters from relationship graph only."""
+    return {"clusters": graph_service.cluster_relationships()}
+
+
+@router.get("/graph/hubs")
+async def graph_hubs(top_k: int = Query(default=10, ge=1, le=100)):
+    """Most highly connected table nodes in the graph."""
+    return {"hubs": graph_service.get_highly_connected_tables(top_k=top_k)}
+
+
+@router.get("/stats")
+async def system_stats():
+    """Combined service stats snapshot."""
+    return {
+        "graph": graph_service.graph_stats,
+        "embeddings": {"total_vectors": embedding_service.total_vectors},
+        "cache": {
+            "query_cache_size": cache_service.query_cache.size(),
+            "context_cache_size": cache_service.context_cache.size(),
+            "embedding_cache_size": cache_service.embedding_cache.size(),
+        },
+    }
+
+
 # ─── HIGH LEVEL ENDPOINT ──────────────────────────────────────────────────────
 
 @router.post("/smart_query")

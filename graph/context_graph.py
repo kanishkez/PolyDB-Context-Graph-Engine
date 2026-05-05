@@ -107,6 +107,7 @@ class ContextGraph:
             return []
 
         visited = set()
+        all_found = set()
         frontier = {node_id}
 
         for _ in range(max_depth):
@@ -124,10 +125,11 @@ class ContextGraph:
                         ):
                             continue
                     next_frontier.add(neighbor)
+                    all_found.add(neighbor)
             visited.update(frontier)
             frontier = next_frontier
 
-        return list(visited - {node_id})
+        return list(all_found)
 
     def find_join_path(
         self,

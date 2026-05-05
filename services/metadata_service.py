@@ -185,7 +185,6 @@ class MetadataService:
                 tags=enrichment.get("tags", []),
             )
             .on_conflict_do_update(
-                constraint=None,
                 index_elements=["table_id"],
                 set_=dict(
                     table_type=enrichment.get("table_type"),
