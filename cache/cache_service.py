@@ -27,7 +27,7 @@ class TTLCache:
         if not entry:
             return None
         value, expires_at = entry
-        if time.time() > expires_at:
+        if time.time() >= expires_at:
             del self._store[k]
             return None
         self._store.move_to_end(k)
@@ -35,7 +35,7 @@ class TTLCache:
 
     def set(self, key: str, value: Any, ttl: Optional[int] = None):
         k = self._key(key)
-        ttl = ttl or self._ttl
+        ttl = self._ttl if ttl is None else ttl
         if k in self._store:
             self._store.move_to_end(k)
         self._store[k] = (value, time.time() + ttl)
@@ -99,6 +99,17 @@ class CacheService:
     def invalidate_table(self, node_id: str):
         """Clear context cache when a table is updated."""
         self.context_cache.delete(f"ctx:{node_id}")
+
+    def reset(self):
+        """Clear all internal caches (useful for test isolation)."""
+        self.query_cache.clear()
+        self.context_cache.clear()
+        self.embedding_cache.clear()
+
+
+def create_cache_service() -> CacheService:
+    """Factory for tests that need isolated cache instances."""
+    return CacheService()
 
 
 cache_service = CacheService()
